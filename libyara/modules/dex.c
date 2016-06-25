@@ -1,6 +1,5 @@
 #include <yara/modules.h>
 #include <yara/mem.h>
-//#include <yara/strutils.h>
 
 #define IMAGE_DEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00 }
 #define IMAGE_ODEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x36, 0x00 }
@@ -134,6 +133,15 @@ begin_declarations;
 
 end_declarations;
 
+PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size);
+void load_header(PDEX_HEADER dex_header, YR_OBJECT *module);
+void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+uint32_t read_uleb128(uint8_t **buf);
+uint32_t get_uleb128(uint8_t *buf);
+size_t len_uleb128(unsigned long n);
+void print_hex_arr(uint8_t *buf, int len);
 
 int module_initialize(
     YR_MODULE *module)
@@ -141,83 +149,68 @@ int module_initialize(
   return ERROR_SUCCESS;
 }
 
-
 int module_finalize(
     YR_MODULE *module)
 {
   return ERROR_SUCCESS;
 }
 
-void print_hex_arr(uint8_t *buf, int len) {
-  for (int i = 0; i < len; i++) {
-    if (i > 0) printf(":");
-    printf("%02X", buf[i]);
-  }
-  printf("\n");
+int module_load(
+    YR_SCAN_CONTEXT *context,
+    YR_OBJECT *module_object,
+    void *module_data,
+    size_t module_data_size)
+{
+  YR_MEMORY_BLOCK *block;
+  YR_BLOCK_ITERATOR *iterator = context->iterator;
 
-  return;
-}
+  foreach_memory_block(iterator, block)
+  {
+    uint8_t *block_data = iterator->fetch_data(iterator);
 
-uint32_t read_uleb128(uint8_t **buf) {
-  uint8_t *ptr = *buf;
-  int result = *(ptr++);
+    if (block_data == NULL) {
+      continue;
+    }
 
-  if (result > 0x7f) {
-      int cur = *(ptr++);
-      result = (result & 0x7f) | ((cur & 0x7f) << 7);
-      if (cur > 0x7f) {
-          cur = *(ptr++);
-          result |= (cur & 0x7f) << 14;
-          if (cur > 0x7f) {
-              cur = *(ptr++);
-              result |= (cur & 0x7f) << 21;
-              if (cur > 0x7f) {
-                  cur = *(ptr++);
-                  result |= cur << 28;
-              }
-          }
-      }
-  }
+    PDEX_HEADER dex_header = dex_get_header(block_data, block->size);
 
-  *buf = ptr;
-  return result;
-}
+    if (dex_header != NULL) {
+      /*
+      printf("Link size: %d\n", *dex_header->link_size);
+      printf("Link offset: 0x%x\n", *dex_header->link_off);
+      printf("Map list offset: 0x%x\n", *dex_header->map_off);
+      printf("String IDs size: %d\n", *dex_header->string_ids_size);
+      printf("String IDs offset: 0x%x\n", *dex_header->string_ids_off);
+      printf("Type IDs size: %d\n", *dex_header->type_ids_size);
+      printf("Type IDS offset: 0x%x\n", *dex_header->type_ids_off);
+      printf("Prototype IDs size: %d\n", *dex_header->proto_ids_size);
+      printf("Prototype IDs offset: 0x%x\n", *dex_header->proto_ids_off);
+      printf("Field IDs size: %d\n", *dex_header->field_ids_size);
+      printf("Field IDs offset: 0x%x\n", *dex_header->field_ids_off);
+      printf("Method IDs size: %d\n", *dex_header->method_ids_size);
+      printf("Method IDs offset: 0x%x\n", *dex_header->method_ids_off);
+      printf("Class definitions size: %d\n", *dex_header->class_defs_size);
+      printf("Class definitions offset: 0x%x\n", *dex_header->class_defs_off);
+      printf("Data size: %d bytes\n", *dex_header->data_size);
+      printf("Data offset: 0x%x\n", *dex_header->data_off);
+      */
 
-uint32_t get_uleb128(uint8_t *buf) {
-  uint8_t *ptr = buf;
-  int result = *(ptr++);
-
-  if (result > 0x7f) {
-      int cur = *(ptr++);
-      result = (result & 0x7f) | ((cur & 0x7f) << 7);
-      if (cur > 0x7f) {
-          cur = *(ptr++);
-          result |= (cur & 0x7f) << 14;
-          if (cur > 0x7f) {
-              cur = *(ptr++);
-              result |= (cur & 0x7f) << 21;
-              if (cur > 0x7f) {
-                  cur = *(ptr++);
-                  result |= cur << 28;
-              }
-          }
-      }
+      load_header(dex_header, module_object);
+      load_string_ids(dex_header, block_data, module_object);
+      load_class_defs(dex_header, block_data, module_object);
+      load_map_list(dex_header, block_data, module_object);
+      break;
+    }
   }
 
-  return result;
+  return ERROR_SUCCESS;
 }
 
-size_t len_uleb128(unsigned long n) {
-  static unsigned char b[32];
-  size_t i = 0;
-  do {
-      b[i] = n & 0x7F;
-      if(n >>= 7)
-          b[i] |= 0x80;
-  } while (b[i++] & 0x80);
+int module_unload(YR_OBJECT *module_object) {
+  yr_free(module_object->data);
 
-  return i;
-}   
+  return ERROR_SUCCESS;
+}
 
 PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size) {
   PDEX_HEADER dex_header;
@@ -351,60 +344,73 @@ void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
   free(class_defs);
 }
 
-int module_load(
-    YR_SCAN_CONTEXT *context,
-    YR_OBJECT *module_object,
-    void *module_data,
-    size_t module_data_size)
-{
-  YR_MEMORY_BLOCK *block;
-  YR_BLOCK_ITERATOR *iterator = context->iterator;
+uint32_t read_uleb128(uint8_t **buf) {
+  uint8_t *ptr = *buf;
+  int result = *(ptr++);
 
-  foreach_memory_block(iterator, block)
-  {
-    uint8_t *block_data = iterator->fetch_data(iterator);
-
-    if (block_data == NULL) {
-      continue;
-    }
-
-    PDEX_HEADER dex_header = dex_get_header(block_data, block->size);
-
-    if (dex_header != NULL) {
-      /*
-      printf("Link size: %d\n", *dex_header->link_size);
-      printf("Link offset: 0x%x\n", *dex_header->link_off);
-      printf("Map list offset: 0x%x\n", *dex_header->map_off);
-      printf("String IDs size: %d\n", *dex_header->string_ids_size);
-      printf("String IDs offset: 0x%x\n", *dex_header->string_ids_off);
-      printf("Type IDs size: %d\n", *dex_header->type_ids_size);
-      printf("Type IDS offset: 0x%x\n", *dex_header->type_ids_off);
-      printf("Prototype IDs size: %d\n", *dex_header->proto_ids_size);
-      printf("Prototype IDs offset: 0x%x\n", *dex_header->proto_ids_off);
-      printf("Field IDs size: %d\n", *dex_header->field_ids_size);
-      printf("Field IDs offset: 0x%x\n", *dex_header->field_ids_off);
-      printf("Method IDs size: %d\n", *dex_header->method_ids_size);
-      printf("Method IDs offset: 0x%x\n", *dex_header->method_ids_off);
-      printf("Class definitions size: %d\n", *dex_header->class_defs_size);
-      printf("Class definitions offset: 0x%x\n", *dex_header->class_defs_off);
-      printf("Data size: %d bytes\n", *dex_header->data_size);
-      printf("Data offset: 0x%x\n", *dex_header->data_off);
-      */
-
-      load_header(dex_header, module_object);
-      load_string_ids(dex_header, block_data, module_object);
-      load_class_defs(dex_header, block_data, module_object);
-      load_map_list(dex_header, block_data, module_object);
-      break;
-    }
+  if (result > 0x7f) {
+      int cur = *(ptr++);
+      result = (result & 0x7f) | ((cur & 0x7f) << 7);
+      if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= (cur & 0x7f) << 14;
+          if (cur > 0x7f) {
+              cur = *(ptr++);
+              result |= (cur & 0x7f) << 21;
+              if (cur > 0x7f) {
+                  cur = *(ptr++);
+                  result |= cur << 28;
+              }
+          }
+      }
   }
+  *buf = ptr;
 
-  return ERROR_SUCCESS;
+  return result;
 }
 
+uint32_t get_uleb128(uint8_t *buf) {
+  uint8_t *ptr = buf;
+  int result = *(ptr++);
 
-int module_unload(YR_OBJECT *module_object) {
-  yr_free(module_object->data);
+  if (result > 0x7f) {
+      int cur = *(ptr++);
+      result = (result & 0x7f) | ((cur & 0x7f) << 7);
+      if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= (cur & 0x7f) << 14;
+          if (cur > 0x7f) {
+              cur = *(ptr++);
+              result |= (cur & 0x7f) << 21;
+              if (cur > 0x7f) {
+                  cur = *(ptr++);
+                  result |= cur << 28;
+              }
+          }
+      }
+  }
 
-  return ERROR_SUCCESS;
+  return result;
+}
+
+size_t len_uleb128(unsigned long n) {
+  static unsigned char b[32];
+  size_t i = 0;
+  do {
+      b[i] = n & 0x7F;
+      if(n >>= 7)
+          b[i] |= 0x80;
+  } while (b[i++] & 0x80);
+
+  return i;
+}   
+
+void print_hex_arr(uint8_t *buf, int len) {
+  for (int i = 0; i < len; i++) {
+    if (i > 0) printf(":");
+    printf("%02X", buf[i]);
+  }
+  printf("\n");
+
+  return;
 }
