@@ -110,6 +110,10 @@ begin_declarations;
     declare_string("value");
   end_struct_array("string_ids");
 
+  begin_struct_array("type_ids");
+    declare_integer("descriptor_idx");
+  end_struct_array("type_ids");
+
   begin_struct_array("class_defs");
     declare_integer("class_idx");
     declare_integer("access_flags");
@@ -120,6 +124,12 @@ begin_declarations;
     declare_integer("class_data_off");
     declare_integer("static_values_off");
   end_struct_array("class_defs");
+
+  begin_struct_array("method_ids");
+    declare_integer("class_idx");
+    declare_integer("proto_idx");
+    declare_integer("name_idx");
+  end_struct_array("method_ids");
 
   begin_struct("map_list");
     declare_integer("size");
@@ -136,8 +146,11 @@ end_declarations;
 PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size);
 void load_header(PDEX_HEADER dex_header, YR_OBJECT *module);
 void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
-void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+void load_type_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
 void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+void load_method_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module);
+char *get_string_item(uint32_t index, YR_OBJECT *module);
 uint32_t read_uleb128(uint8_t **buf);
 uint32_t get_uleb128(uint8_t *buf);
 size_t len_uleb128(unsigned long n);
@@ -197,8 +210,11 @@ int module_load(
 
       load_header(dex_header, module_object);
       load_string_ids(dex_header, block_data, module_object);
+      load_type_ids(dex_header, block_data, module_object);
       load_class_defs(dex_header, block_data, module_object);
+      load_method_ids(dex_header, block_data, module_object);
       load_map_list(dex_header, block_data, module_object);
+
       break;
     }
   }
@@ -266,6 +282,100 @@ void load_header(PDEX_HEADER dex_header, YR_OBJECT *module) {
   set_integer(*dex_header->data_off, module, "header.data_off");
 }
 
+void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
+  int string_ids_size = sizeof(STRING_ID_ITEM[*dex_header->string_ids_size]);
+  STRING_ID_ITEM *string_ids = malloc(string_ids_size);
+  memcpy(string_ids, data + *dex_header->string_ids_off, string_ids_size);
+
+  string_ids_size = *dex_header->string_ids_size * sizeof(STRING_ID_ITEM);
+  for (int i = 0, p = 0; p < string_ids_size; i += 1, p += sizeof(STRING_ID_ITEM)) {
+    uint32_t offset = *string_ids[i].string_data_off;
+    uint8_t *string_data = data + offset;
+    unsigned int string_size = read_uleb128(&string_data);
+    char *string = malloc(string_size + 1);
+    memcpy(string, string_data, string_size);
+    /*
+     * Dex string_ids aren't null terminated. If we don't pad with null,
+     * will sometimes get bytes from previous string.
+     */
+    string[string_size] = '\0';
+
+    set_integer(offset, module, "string_ids[%i].offset", i);
+    set_integer(string_size, module, "string_ids[%i].size", i);
+    set_integer(string_size + len_uleb128(string_size), module, "string_ids[%i].item_size", i);
+    set_string(string, module, "string_ids[%i].value", i);
+
+    //unsigned int item_size = string_size + len_uleb128(string_size);
+    //printf("string idx=%d, offset=0x%x, size=%d, item_size=%d, val=\"%s\"\n", i, offset, string_size, string_size + len_uleb128(string_size), string);
+
+    // Don't free the string since it may be referenced later
+    free(string);
+  }
+  free(string_ids);
+}
+
+void load_type_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
+  int type_ids_size = sizeof(TYPE_ID_ITEM[*dex_header->type_ids_size]);
+  TYPE_ID_ITEM *type_ids = malloc(type_ids_size);
+  memcpy(type_ids, data + *dex_header->type_ids_off, type_ids_size);
+
+  type_ids_size = *dex_header->type_ids_size * sizeof(TYPE_ID_ITEM);
+  for (int i = 0, p = 0; p < type_ids_size; i += 1, p += sizeof(TYPE_ID_ITEM)) {
+    uint32_t descriptor_idx = *type_ids[i].descriptor_idx;
+
+    set_integer(descriptor_idx, module, "type_ids[%i].descriptor_idx", i);
+  }
+  free(type_ids);
+}
+
+void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
+  int class_defs_size = sizeof(CLASS_DEF_ITEM[*dex_header->class_defs_size]);
+  CLASS_DEF_ITEM *class_defs = malloc(class_defs_size);
+  memcpy(class_defs, data + *dex_header->class_defs_off, class_defs_size);
+
+  class_defs_size = *dex_header->class_defs_size * sizeof(CLASS_DEF_ITEM);
+  for (int i = 0, p = 0; p < class_defs_size; i += 1, p += sizeof(CLASS_DEF_ITEM)) {
+    uint32_t class_idx = *class_defs[i].class_idx;
+    uint32_t access_flags = *class_defs[i].access_flags;
+    uint32_t superclass_idx = *class_defs[i].superclass_idx;
+    uint32_t interfaces_off = *class_defs[i].interfaces_off;
+    uint32_t source_file_idx = *class_defs[i].source_file_idx;
+    uint32_t annotations_off = *class_defs[i].annotations_off;
+    uint32_t class_data_off = *class_defs[i].class_data_off;
+    uint32_t static_values_off = *class_defs[i].static_values_off;
+
+    set_integer(class_idx, module, "class_defs[%i].class_idx", i);
+    set_integer(access_flags, module, "class_defs[%i].access_flags", i);
+    set_integer(superclass_idx, module, "class_defs[%i].superclass_idx", i);
+    set_integer(interfaces_off, module, "class_defs[%i].interfaces_off", i);
+    set_integer(source_file_idx, module, "class_defs[%i].source_file_idx", i);
+    set_integer(annotations_off, module, "class_defs[%i].annotations_off", i);
+    set_integer(class_data_off, module, "class_defs[%i].class_data_off", i);
+    set_integer(static_values_off, module, "class_defs[%i].static_values_off", i);
+  }
+  free(class_defs);
+}
+
+void load_method_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
+  int method_ids_size = sizeof(METHOD_ID_ITEM[*dex_header->method_ids_size]);
+  METHOD_ID_ITEM *method_ids = malloc(method_ids_size);
+  memcpy(method_ids, data + *dex_header->method_ids_off, method_ids_size);
+
+  method_ids_size = *dex_header->method_ids_size * sizeof(METHOD_ID_ITEM);
+  for (int i = 0, p = 0; p < method_ids_size; i += 1, p += sizeof(METHOD_ID_ITEM)) {
+    uint16_t class_idx = *method_ids[i].class_idx;
+    uint16_t proto_idx = *method_ids[i].proto_idx;
+    uint32_t name_idx =  *method_ids[i].name_idx;
+
+    set_integer(class_idx, module, "method_ids[%i].class_idx", i);
+    set_integer(proto_idx, module, "method_ids[%i].proto_idx", i);
+    set_integer(name_idx, module, "method_ids[%i].name_idx", i);
+
+    //printf("%s->s(s)\n", get_string_item(get_integer(module, "type_ids[%i].descriptor_idx", class_idx), module));
+  }
+  free(method_ids);
+}
+
 void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
   uint32_t offset = *dex_header->map_off;
   uint8_t *pmap_list = data + offset;
@@ -285,63 +395,15 @@ void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
   free(map_list);
 }
 
-void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
-  int string_ids_size = sizeof(STRING_ID_ITEM[*dex_header->string_ids_size]);
-  STRING_ID_ITEM *string_ids = malloc(string_ids_size);
-  memcpy(string_ids, data + *dex_header->string_ids_off, string_ids_size);
+char *get_string_item(uint32_t index, YR_OBJECT *module) {
+    SIZED_STRING *sized_string = get_string(module, "string_ids[%i].value", index);
+    char *string = malloc(sized_string->length + 1);
+    strcpy(string, sized_string->c_string);
 
-  string_ids_size = *dex_header->string_ids_size * sizeof(STRING_ID_ITEM);
-  for (int i = 0, p = 0; p < string_ids_size; i += 1, p += 4) {
-    uint32_t offset = string_ids[i].string_data_off[0];
-    uint8_t *string_data = data + offset;
-    unsigned int string_size = read_uleb128(&string_data);
-    char *string = malloc(string_size + 1);
-    memcpy(string, string_data, string_size);
-    /*
-     * Dex string_ids aren't null terminated. If we don't pad with null,
-     * will sometimes get bytes from previous string.
-     */
-    string[string_size] = '\0';
+    // c_string is supposed to be null terminated, but it's not for some reason
+    string[sized_string->length] = '\0';
 
-    set_integer(offset, module, "string_ids[%i].offset", i);
-    set_integer(string_size, module, "string_ids[%i].size", i);
-    set_integer(string_size + len_uleb128(string_size), module, "string_ids[%i].item_size", i);
-    set_string(string, module, "string_ids[%i].value", i);
-
-    //unsigned int item_size = string_size + len_uleb128(string_size);
-    //printf("string idx=%d, offset=0x%x, size=%d, item_size=%d, val=\"%s\"\n", i, offset, string_size, string_size + len_uleb128(string_size), string);
-
-    free(string);
-  }
-  free(string_ids);
-}
-
-void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
-  int class_defs_size = sizeof(CLASS_DEF_ITEM[*dex_header->class_defs_size]);
-  CLASS_DEF_ITEM *class_defs = malloc(class_defs_size);
-  memcpy(class_defs, data + *dex_header->class_defs_off, class_defs_size);
-
-  class_defs_size = *dex_header->string_ids_size * sizeof(STRING_ID_ITEM);
-  for (int i = 0, p = 0; p < class_defs_size; i += 1, p += 4) {
-    uint32_t class_idx = class_defs[i].class_idx[0];
-    uint32_t access_flags = class_defs[i].access_flags[0];
-    uint32_t superclass_idx = class_defs[i].superclass_idx[0];
-    uint32_t interfaces_off = class_defs[i].interfaces_off[0];
-    uint32_t source_file_idx = class_defs[i].source_file_idx[0];
-    uint32_t annotations_off = class_defs[i].annotations_off[0];
-    uint32_t class_data_off = class_defs[i].class_data_off[0];
-    uint32_t static_values_off = class_defs[i].static_values_off[0];
-
-    set_integer(class_idx, module, "class_defs[%i].class_idx", i);
-    set_integer(access_flags, module, "class_defs[%i].access_flags", i);
-    set_integer(superclass_idx, module, "class_defs[%i].superclass_idx", i);
-    set_integer(interfaces_off, module, "class_defs[%i].interfaces_off", i);
-    set_integer(source_file_idx, module, "class_defs[%i].source_file_idx", i);
-    set_integer(annotations_off, module, "class_defs[%i].annotations_off", i);
-    set_integer(class_data_off, module, "class_defs[%i].class_data_off", i);
-    set_integer(static_values_off, module, "class_defs[%i].static_values_off", i);
-  }
-  free(class_defs);
+    return string;
 }
 
 uint32_t read_uleb128(uint8_t **buf) {
