@@ -21,6 +21,7 @@ endif
 #
 # MODULES += modules/yourmodule.c
 #
+MODULES += modules/dex.c
 
 AM_YFLAGS=-d
 
