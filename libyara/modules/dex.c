@@ -10,60 +10,71 @@
 #define MODULE_NAME dex
 
 typedef struct {
-    uint8_t magic[8];
-    uint32_t checksum[1];
-    uint8_t signature[20];
-    uint32_t file_size[1];
-    uint32_t header_size[1];
-    uint32_t endian_tag[1];
-    uint32_t link_size[1];
-    uint32_t link_off[1];
-    uint32_t map_off[1];
-    uint32_t string_ids_size[1];
-    uint32_t string_ids_off[1];
-    uint32_t type_ids_size[1];
-    uint32_t type_ids_off[1];
-    uint32_t proto_ids_size[1];
-    uint32_t proto_ids_off[1];
-    uint32_t field_ids_size[1];
-    uint32_t field_ids_off[1];
-    uint32_t method_ids_size[1];
-    uint32_t method_ids_off[1];
-    uint32_t class_defs_size[1];
-    uint32_t class_defs_off[1];
-    uint32_t data_size[1];
-    uint32_t data_off[1];
+  uint8_t magic[8];
+  uint32_t checksum[1];
+  uint8_t signature[20];
+  uint32_t file_size[1];
+  uint32_t header_size[1];
+  uint32_t endian_tag[1];
+  uint32_t link_size[1];
+  uint32_t link_off[1];
+  uint32_t map_off[1];
+  uint32_t string_ids_size[1];
+  uint32_t string_ids_off[1];
+  uint32_t type_ids_size[1];
+  uint32_t type_ids_off[1];
+  uint32_t proto_ids_size[1];
+  uint32_t proto_ids_off[1];
+  uint32_t field_ids_size[1];
+  uint32_t field_ids_off[1];
+  uint32_t method_ids_size[1];
+  uint32_t method_ids_off[1];
+  uint32_t class_defs_size[1];
+  uint32_t class_defs_off[1];
+  uint32_t data_size[1];
+  uint32_t data_off[1];
 } DEX_HEADER, *PDEX_HEADER;
 
 typedef struct {
-    uint32_t class_idx[1];
-    uint32_t access_flags[1];
-    uint32_t superclass_idx[1];
-    uint32_t interfaces_off[1];
-    uint32_t source_file_idx[1];
-    uint32_t annotations_off[1];
-    uint32_t class_data_off[1];
-    uint32_t static_values_off[1];
+  uint32_t class_idx[1];
+  uint32_t access_flags[1];
+  uint32_t superclass_idx[1];
+  uint32_t interfaces_off[1];
+  uint32_t source_file_idx[1];
+  uint32_t annotations_off[1];
+  uint32_t class_data_off[1];
+  uint32_t static_values_off[1];
 } CLASS_DEF_ITEM;
 
 typedef struct {
-    uint16_t class_idx[1];
-    uint16_t proto_idx[1];
-    uint32_t name_idx[1];
+  uint16_t class_idx[1];
+  uint16_t proto_idx[1];
+  uint32_t name_idx[1];
 } METHOD_ID_ITEM;
 
 typedef struct {
-    uint32_t string_data_off[1];
+  uint32_t string_data_off[1];
 } STRING_ID_ITEM;
 
 typedef struct {
-    uint32_t descriptor_idx[1];
+  uint32_t descriptor_idx[1];
 } TYPE_ID_ITEM;
 
 typedef struct {
-    uint32_t descriptor_idx[1];
+  uint32_t descriptor_idx[1];
 } PROTO_ID_ITEM;
 
+typedef struct {
+  uint16_t type[1];
+  uint16_t unused[1];
+  uint32_t size[1];
+  uint32_t offset[1];
+} MAP_ITEM;
+
+typedef struct {
+  uint32_t size[1];
+  MAP_ITEM map_items[];
+} MAP_LIST;
 
 begin_declarations;
 
@@ -109,7 +120,17 @@ begin_declarations;
     declare_integer("annotations_off");
     declare_integer("class_data_off");
     declare_integer("static_values_off");
-  end_struct_array("class_defs")
+  end_struct_array("class_defs");
+
+  begin_struct("map_list");
+    declare_integer("size");
+    begin_struct_array("map_items");
+      declare_integer("type");
+      declare_integer("unused");
+      declare_integer("size");
+      declare_integer("offset");
+    end_struct_array("map_items");
+  end_struct("map_list");
 
 end_declarations;
 
@@ -137,72 +158,68 @@ void print_hex_arr(uint8_t *buf, int len) {
   return;
 }
 
-uint32_t read_uleb128(uint8_t **buf)
-{
-    uint8_t *ptr = *buf;
-    int result = *(ptr++);
+uint32_t read_uleb128(uint8_t **buf) {
+  uint8_t *ptr = *buf;
+  int result = *(ptr++);
 
-    if (result > 0x7f) {
-        int cur = *(ptr++);
-        result = (result & 0x7f) | ((cur & 0x7f) << 7);
-        if (cur > 0x7f) {
-            cur = *(ptr++);
-            result |= (cur & 0x7f) << 14;
-            if (cur > 0x7f) {
-                cur = *(ptr++);
-                result |= (cur & 0x7f) << 21;
-                if (cur > 0x7f) {
-                    cur = *(ptr++);
-                    result |= cur << 28;
-                }
-            }
-        }
-    }
+  if (result > 0x7f) {
+      int cur = *(ptr++);
+      result = (result & 0x7f) | ((cur & 0x7f) << 7);
+      if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= (cur & 0x7f) << 14;
+          if (cur > 0x7f) {
+              cur = *(ptr++);
+              result |= (cur & 0x7f) << 21;
+              if (cur > 0x7f) {
+                  cur = *(ptr++);
+                  result |= cur << 28;
+              }
+          }
+      }
+  }
 
-    *buf = ptr;
-    return result;
+  *buf = ptr;
+  return result;
 }
 
-uint32_t get_uleb128(uint8_t *buf)
-{
-    uint8_t *ptr = buf;
-    int result = *(ptr++);
+uint32_t get_uleb128(uint8_t *buf) {
+  uint8_t *ptr = buf;
+  int result = *(ptr++);
 
-    if (result > 0x7f) {
-        int cur = *(ptr++);
-        result = (result & 0x7f) | ((cur & 0x7f) << 7);
-        if (cur > 0x7f) {
-            cur = *(ptr++);
-            result |= (cur & 0x7f) << 14;
-            if (cur > 0x7f) {
-                cur = *(ptr++);
-                result |= (cur & 0x7f) << 21;
-                if (cur > 0x7f) {
-                    cur = *(ptr++);
-                    result |= cur << 28;
-                }
-            }
-        }
-    }
+  if (result > 0x7f) {
+      int cur = *(ptr++);
+      result = (result & 0x7f) | ((cur & 0x7f) << 7);
+      if (cur > 0x7f) {
+          cur = *(ptr++);
+          result |= (cur & 0x7f) << 14;
+          if (cur > 0x7f) {
+              cur = *(ptr++);
+              result |= (cur & 0x7f) << 21;
+              if (cur > 0x7f) {
+                  cur = *(ptr++);
+                  result |= cur << 28;
+              }
+          }
+      }
+  }
 
-    return result;
+  return result;
 }
 
-size_t len_uleb128(unsigned long n)
-{
-    static unsigned char b[32];
-    size_t i = 0;
-    do {
-        b[i] = n & 0x7F;
-        if(n >>= 7)
-            b[i] |= 0x80;
-    } while (b[i++] & 0x80);
+size_t len_uleb128(unsigned long n) {
+  static unsigned char b[32];
+  size_t i = 0;
+  do {
+      b[i] = n & 0x7F;
+      if(n >>= 7)
+          b[i] |= 0x80;
+  } while (b[i++] & 0x80);
 
-    return i;
+  return i;
 }   
 
-PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size)
-{
+PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size) {
   PDEX_HEADER dex_header;
 
   if (data_size < sizeof(DEX_HEADER)) {
@@ -256,6 +273,25 @@ void load_header(PDEX_HEADER dex_header, YR_OBJECT *module) {
   set_integer(*dex_header->data_off, module, "header.data_off");
 }
 
+void load_map_list(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
+  uint32_t offset = *dex_header->map_off;
+  uint8_t *pmap_list = data + offset;
+  size_t map_size = *pmap_list;
+
+  int size = sizeof(MAP_LIST) + (map_size * sizeof(MAP_ITEM));
+  MAP_LIST *map_list = malloc(size);
+  memcpy(map_list, pmap_list, size);
+
+  set_integer(*map_list->size, module, "map_list.size");
+  for (int i = 0; i < map_size; i++) {
+    set_integer(*map_list->map_items[i].type, module, "map_list.map_items[%i].type", i);
+    set_integer(*map_list->map_items[i].size, module, "map_list.map_items[%i].size", i);
+    set_integer(*map_list->map_items[i].offset, module, "map_list.map_items[%i].offset", i);
+  }
+
+  free(map_list);
+}
+
 void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
   int string_ids_size = sizeof(STRING_ID_ITEM[*dex_header->string_ids_size]);
   STRING_ID_ITEM *string_ids = malloc(string_ids_size);
@@ -264,7 +300,6 @@ void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
   string_ids_size = *dex_header->string_ids_size * sizeof(STRING_ID_ITEM);
   for (int i = 0, p = 0; p < string_ids_size; i += 1, p += 4) {
     uint32_t offset = string_ids[i].string_data_off[0];
-
     uint8_t *string_data = data + offset;
     unsigned int string_size = read_uleb128(&string_data);
     char *string = malloc(string_size + 1);
@@ -275,13 +310,13 @@ void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, YR_OBJECT *module) {
      */
     string[string_size] = '\0';
 
-    unsigned int item_size = string_size + len_uleb128(string_size);
-    printf("string idx=%d, offset=0x%x, size=%d, item_size=%d, val=\"%s\"\n", i, offset, string_size, item_size, string);
-
     set_integer(offset, module, "string_ids[%i].offset", i);
     set_integer(string_size, module, "string_ids[%i].size", i);
     set_integer(string_size + len_uleb128(string_size), module, "string_ids[%i].item_size", i);
     set_string(string, module, "string_ids[%i].value", i);
+
+    //unsigned int item_size = string_size + len_uleb128(string_size);
+    //printf("string idx=%d, offset=0x%x, size=%d, item_size=%d, val=\"%s\"\n", i, offset, string_size, string_size + len_uleb128(string_size), string);
 
     free(string);
   }
@@ -336,6 +371,7 @@ int module_load(
     PDEX_HEADER dex_header = dex_get_header(block_data, block->size);
 
     if (dex_header != NULL) {
+      /*
       printf("Link size: %d\n", *dex_header->link_size);
       printf("Link offset: 0x%x\n", *dex_header->link_off);
       printf("Map list offset: 0x%x\n", *dex_header->map_off);
@@ -353,11 +389,12 @@ int module_load(
       printf("Class definitions offset: 0x%x\n", *dex_header->class_defs_off);
       printf("Data size: %d bytes\n", *dex_header->data_size);
       printf("Data offset: 0x%x\n", *dex_header->data_off);
+      */
 
       load_header(dex_header, module_object);
       load_string_ids(dex_header, block_data, module_object);
       load_class_defs(dex_header, block_data, module_object);
-
+      load_map_list(dex_header, block_data, module_object);
       break;
     }
   }
@@ -366,8 +403,7 @@ int module_load(
 }
 
 
-int module_unload(YR_OBJECT *module_object)
-{
+int module_unload(YR_OBJECT *module_object) {
   yr_free(module_object->data);
 
   return ERROR_SUCCESS;
