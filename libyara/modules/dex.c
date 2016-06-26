@@ -2,7 +2,7 @@
 #include <yara/mem.h>
 
 #define IMAGE_DEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00 }
-#define IMAGE_ODEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x36, 0x00 }
+#define IMAGE_ODEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x79, 0x0A, 0x30, 0x33, 0x35, 0x00 }
 
 #define member_size(type, member) sizeof(((type *)0)->member)
 
@@ -271,9 +271,8 @@ PDEX_HEADER dex_get_header(uint8_t *data, size_t data_size) {
   }
 
   dex_header = (PDEX_HEADER) data;
-
-  if (!memcmp(dex_header->magic, IMAGE_DEX_SIGNATURE, sizeof(IMAGE_DEX_SIGNATURE))
-    && !memcmp(dex_header->magic, IMAGE_ODEX_SIGNATURE, sizeof(IMAGE_ODEX_SIGNATURE))) {
+  if (0 != memcmp(dex_header->magic, IMAGE_DEX_SIGNATURE, sizeof(IMAGE_DEX_SIGNATURE))
+    && 0 != memcmp(dex_header->magic, IMAGE_ODEX_SIGNATURE, sizeof(IMAGE_ODEX_SIGNATURE))) {
     return NULL;
   }
 
@@ -284,7 +283,7 @@ void load_header(PDEX_HEADER dex_header, YR_OBJECT *module) {
   unsigned long magic_size = member_size(DEX_HEADER, magic);
   char *magic = malloc(magic_size + 1);
   memcpy(magic, dex_header->magic, magic_size);
-  magic[magic_size] = '\0';  
+  magic[magic_size] = '\0';
   set_string(magic, module, "header.magic");
 
   set_integer(*dex_header->checksum, module, "header.checksum");
@@ -582,7 +581,7 @@ size_t len_uleb128(unsigned long n) {
   } while (b[i++] & 0x80);
 
   return i;
-}   
+}
 
 void print_hex_arr(uint8_t *buf, int len) {
   for (int i = 0; i < len; i++) {
