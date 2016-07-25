@@ -3,6 +3,7 @@ MODULES =  modules/tests.c
 MODULES += modules/pe.c
 MODULES += modules/elf.c
 MODULES += modules/math.c
+MODULES += modules/dex.c
 
 if CUCKOO
 MODULES += modules/cuckoo.c
@@ -21,7 +22,6 @@ endif
 #
 # MODULES += modules/yourmodule.c
 #
-MODULES += modules/dex.c
 
 AM_YFLAGS=-d
 

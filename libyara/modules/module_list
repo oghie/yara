@@ -2,6 +2,7 @@ MODULE(tests)
 MODULE(pe)
 MODULE(elf)
 MODULE(math)
+MODULE(dex)
 
 #ifdef CUCKOO
 MODULE(cuckoo)
@@ -14,5 +15,3 @@ MODULE(magic)
 #ifdef HASH
 MODULE(hash)
 #endif
-
-MODULE(dex)
