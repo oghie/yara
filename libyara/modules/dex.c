@@ -332,7 +332,9 @@ void load_string_ids(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR
   memcpy(string_ids, data + *dex_header->string_ids_offset, string_ids_size);
 
   string_ids_size = *dex_header->string_ids_size * sizeof(STRING_ID_ITEM);
-  for (int i = 0, p = 0; p < string_ids_size; i += 1, p += sizeof(STRING_ID_ITEM)) {
+  int i = 0;
+  int p = 0;
+  for (i = 0, p = 0; p < string_ids_size; i += 1, p += sizeof(STRING_ID_ITEM)) {
     uint32_t offset = *string_ids[i].string_data_offset;
     uint8_t *string_data = data + offset;
     unsigned int string_size = read_uleb128(&string_data);
@@ -368,7 +370,9 @@ void load_type_ids(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR_O
   memcpy(type_ids, data + *dex_header->type_ids_offset, type_ids_size);
 
   type_ids_size = *dex_header->type_ids_size * sizeof(TYPE_ID_ITEM);
-  for (int i = 0, p = 0; p < type_ids_size; i += 1, p += sizeof(TYPE_ID_ITEM)) {
+  int i = 0;
+  int p = 0;
+  for (i = 0, p = 0; p < type_ids_size; i += 1, p += sizeof(TYPE_ID_ITEM)) {
     uint32_t descriptor_idx = *type_ids[i].descriptor_idx;
 
     set_integer(descriptor_idx, module, "type_ids[%i].descriptor_idx", i);
@@ -387,7 +391,9 @@ void load_class_defs(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR
   memcpy(class_defs, data + *dex_header->class_defs_offset, class_defs_size);
 
   class_defs_size = *dex_header->class_defs_size * sizeof(CLASS_DEF_ITEM);
-  for (int i = 0, p = 0; p < class_defs_size; i += 1, p += sizeof(CLASS_DEF_ITEM)) {
+  int i = 0;
+  int p = 0;
+  for (i = 0, p = 0; p < class_defs_size; i += 1, p += sizeof(CLASS_DEF_ITEM)) {
     uint32_t class_idx = *class_defs[i].class_idx;
     uint32_t access_flags = *class_defs[i].access_flags;
     uint32_t superclass_idx = *class_defs[i].superclass_idx;
@@ -445,7 +451,9 @@ void load_field_ids(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR_
   memcpy(field_ids, data + *dex_header->field_ids_offset, field_ids_size);
 
   field_ids_size = *dex_header->field_ids_size * sizeof(FIELD_ID_ITEM);
-  for (int i = 0, p = 0; p < field_ids_size; i += 1, p += sizeof(FIELD_ID_ITEM)) {
+  int i = 0;
+  int p = 0;
+  for (i = 0, p = 0; p < field_ids_size; i += 1, p += sizeof(FIELD_ID_ITEM)) {
     uint16_t class_idx = *field_ids[i].class_idx;
     uint16_t type_idx = *field_ids[i].type_idx;
     uint32_t name_idx =  *field_ids[i].name_idx;
@@ -510,7 +518,8 @@ void load_map_list(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR_O
   memcpy(map_list, pmap_list, map_data_size);
 
   set_integer(*map_list->size, module, "map_list.size");
-  for (int i = 0; i < map_size; i++) {
+  int i = 0;
+  for (i = 0; i < map_size; i++) {
     set_integer(*map_list->map_items[i].type, module, "map_list.map_items[%i].type", i);
     set_integer(*map_list->map_items[i].size, module, "map_list.map_items[%i].size", i);
     set_integer(*map_list->map_items[i].offset, module, "map_list.map_items[%i].offset", i);
@@ -548,7 +557,8 @@ char *get_prototype_string(uint16_t proto_idx, uint8_t *data, size_t data_size, 
   memcpy(type_list, ptype_list, size);
   char *params[type_list_size];
   int string_size = 0;
-  for (int i = 0; i < type_list_size; i++) {
+  int i = 0;
+  for (i = 0; i < type_list_size; i++) {
     char *param = get_string_item(get_integer(module, "type_ids[%i].descriptor_idx", *type_list->type_items[i].type_idx), module);
     string_size += strlen(param);
     params[i] = param;
@@ -556,7 +566,7 @@ char *get_prototype_string(uint16_t proto_idx, uint8_t *data, size_t data_size, 
 
   char *parameters = yr_malloc(string_size + 1);
   strcpy(parameters, "");
-  for (int i = 0; i < type_list_size; i++) {
+  for (i = 0; i < type_list_size; i++) {
     strcat(parameters, params[i]);
   }
   parameters[string_size] = '\0';
@@ -630,7 +640,8 @@ size_t len_uleb128(unsigned long n) {
 
 
 void print_hex_arr(uint8_t *buf, int len) {
-  for (int i = 0; i < len; i++) {
+  int i = 0;
+  for (i = 0; i < len; i++) {
     if (i > 0) printf(":");
     printf("%02X", buf[i]);
   }
