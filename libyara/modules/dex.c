@@ -1,15 +1,17 @@
 #include <yara/modules.h>
 #include <yara/mem.h>
 
-#define IMAGE_DEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00 }
-#define IMAGE_ODEX_SIGNATURE (uint8_t[8]) { 0x64, 0x65, 0x79, 0x0A, 0x30, 0x33, 0x35, 0x00 }
+#define IMAGE_DEX_SIGNATURE (uint8_t[4]) { 0x64, 0x65, 0x78, 0x0A } // 0x30, 0x33, 0x35, 0x00 }
+#define IMAGE_ODEX_SIGNATURE (uint8_t[4]) { 0x64, 0x65, 0x79, 0x0A } //, 0x30, 0x33, 0x35, 0x00 }
 
 #define member_size(type, member) sizeof(((type *)0)->member)
 
 #define MODULE_NAME dex
 
 typedef struct {
-  uint8_t magic[8];
+  uint8_t magic[4];
+  uint8_t versioning[3];
+  uint8_t buffer[1];
   uint32_t checksum[1];
   uint8_t signature[20];
   uint32_t file_size[1];
@@ -96,6 +98,7 @@ begin_declarations;
 
   begin_struct("header");
     declare_string("magic");
+    declare_integer("versioning");
     declare_integer("checksum");
     declare_string("signature");
     declare_integer("file_size");
@@ -290,6 +293,10 @@ void load_header(PDEX_HEADER dex_header, YR_OBJECT *module) {
   memcpy(magic, dex_header->magic, magic_size);
   magic[magic_size] = '\0';
   set_string(magic, module, "header.magic");
+
+  int test = 0;
+  sscanf((const char *) dex_header->versioning, "%d", &test);
+  set_integer(test, module, "header.versioning");
 
   set_integer(*dex_header->checksum, module, "header.checksum");
 
