@@ -426,7 +426,8 @@ void load_proto_ids(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR_
   memcpy(proto_ids, data + *dex_header->proto_ids_offset, proto_ids_size);
 
   proto_ids_size = *dex_header->proto_ids_size * sizeof(PROTO_ID_ITEM);
-  for (int i = 0, p = 0; p < proto_ids_size; i += 1, p += sizeof(PROTO_ID_ITEM)) {
+  int i,p;
+  for (i = 0, p = 0; p < proto_ids_size; i += 1, p += sizeof(PROTO_ID_ITEM)) {
     uint32_t shorty_idx = *proto_ids[i].shorty_idx;
     uint32_t return_type_idx = *proto_ids[i].return_type_idx;
     uint32_t parameters_offset =  *proto_ids[i].parameters_offset;
@@ -483,7 +484,8 @@ void load_method_ids(PDEX_HEADER dex_header, uint8_t *data, size_t data_size, YR
   memcpy(method_ids, data + *dex_header->method_ids_offset, method_ids_size);
 
   method_ids_size = *dex_header->method_ids_size * sizeof(METHOD_ID_ITEM);
-  for (int i = 0, p = 0; p < method_ids_size; i += 1, p += sizeof(METHOD_ID_ITEM)) {
+  int i,p;
+  for (i = 0, p = 0; p < method_ids_size; i += 1, p += sizeof(METHOD_ID_ITEM)) {
     uint16_t class_idx = *method_ids[i].class_idx;
     uint16_t proto_idx = *method_ids[i].proto_idx;
     uint32_t name_idx =  *method_ids[i].name_idx;
